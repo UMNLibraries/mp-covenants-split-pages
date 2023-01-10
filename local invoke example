@@ -1,0 +1,12 @@
+# Milwaukee single-page
+sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "test/milwaukee/100_2022-04-14_1311_DEED/02858053_DEED_0001.tif" | sam local invoke -e -
+
+
+sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "test/milwaukee/100_2022-04-14_1311_DEED/02886225_DEED_0002.tif" | sam local invoke -e -
+
+# Dakota County multipage examples
+sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "test/mn-dakota-county/20428498-0.tif" | sam local invoke -e -
+
+
+# Oversized Dakota Torrens cert (will need to be re-uploaded due to overwrite)
+sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "test/mn-dakota-county/doc_000079_book_001_page_079.tif" | sam local invoke -e -
