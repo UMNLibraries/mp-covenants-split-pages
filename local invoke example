@@ -8,5 +8,15 @@ sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --
 sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "test/mn-dakota-county/20428498-0.tif" | sam local invoke -e -
 
 
-# Oversized Dakota Torrens cert (will need to be re-uploaded due to overwrite)
+# Oversized dimensions Dakota Torrens cert (will need to be re-uploaded due to overwrite)
 sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "test/mn-dakota-county/doc_000079_book_001_page_079.tif" | sam local invoke -e -
+
+# Oversized memory Dakota Torrens deed (will need to be re-uploaded due to overwrite)
+sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "test/mn-dakota-county/doc_NONE_book_183_page_578_SPLITPAGE_1.tif" | sam local invoke -e -
+
+sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "test/mn-dakota-county/doc_NONE_book_183_page_578.tif" | sam local invoke -e -
+
+
+sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "raw/mn-dakota-county/Abstract_Images_Books_Deeds 104-277 by Book and Page/DEEDS/doc_NONE_book_104_page_2.tif" | sam local invoke -e -
+
+sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "raw/mn-dakota-county/Abstract_Images_Books_Deeds 104-277 by Book and Page/DEEDS/doc_NONE_book_276_page_624.tif" | sam local invoke -e -
