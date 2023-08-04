@@ -220,7 +220,7 @@ def lambda_handler(event, context):
 
         out_keys = []
         for page in split_result:
-            key_minus_extension = re.split(r'\.tif(?:f)?', page['key'])[0]
+            key_minus_extension = re.split(r'\.tif(?:f)?', page['key'], flags=re.IGNORECASE)[0]
             out_key = f"{key_minus_extension}_SPLITPAGE_{page['page_num']}.tif"
 
             out_keys.append({'bucket': page['bucket'], 'key': out_key, 'page_num': page['page_num']})
