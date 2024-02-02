@@ -59,7 +59,7 @@ def check_oversized_dimen(bucket, key, im):
         new_width = int(float(width)
                         * float(new_height/float(height)))
 
-    im = im.resize((new_width, new_height), Image.ANTIALIAS)
+    im = im.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
     buffer = io.BytesIO()
     im.save(buffer, format="tiff")
