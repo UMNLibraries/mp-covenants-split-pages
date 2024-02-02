@@ -99,7 +99,7 @@ def check_oversized_mem(im, max_bytes=10485760):
         new_bytes_ratio = math.sqrt(new_bytes_per_pixel / original_bytes_per_pixel)
         new_width, new_height = int(0.95* new_bytes_ratio * im.size[0]), int(0.95* new_bytes_ratio * im.size[1])
 
-        im = im.resize((new_width, new_height), Image.ANTIALIAS)
+        im = im.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         buffer = io.BytesIO()
         im.save(buffer, format="tiff")
