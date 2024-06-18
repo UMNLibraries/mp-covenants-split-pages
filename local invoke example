@@ -20,3 +20,6 @@ sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --
 sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "raw/mn-dakota-county/Abstract_Images_Books_Deeds 104-277 by Book and Page/DEEDS/doc_NONE_book_104_page_2.tif" | sam local invoke -e -
 
 sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "raw/mn-dakota-county/Abstract_Images_Books_Deeds 104-277 by Book and Page/DEEDS/doc_NONE_book_276_page_624.tif" | sam local invoke -e -
+
+# weirdly formatted indexed TIF, but you have to reupload if you want to do a new test
+sam build && sam local generate-event s3 put --bucket "covenants-deed-images" --key "test/mn-olmsted-county/H81540.tiff" | sam local invoke -e -

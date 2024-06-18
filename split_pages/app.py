@@ -3,6 +3,7 @@ import re
 import math
 import urllib.parse
 import boto3
+import botocore
 
 from PIL import Image
 
@@ -33,6 +34,7 @@ covenants-deeds-images
 
 Image.MAX_IMAGE_PIXELS = 1000000000
 s3 = boto3.client('s3')
+
 
 def check_oversized_dimen(bucket, key, im):
     '''
@@ -66,15 +68,64 @@ def check_oversized_dimen(bucket, key, im):
     buffer.seek(0)
 
     # Now overwrite the original TIF image, which should re-trigger the Step Function
-    s3.put_object(
-        Body=buffer,
-        Bucket=bucket,
-        Key=key,
-        StorageClass='GLACIER_IR',
-        ContentType='image/tif',
-        # ACL='public-read'
-    )
-    return True
+    try:
+        s3_response = s3.put_object(
+            Body=buffer,
+            Bucket=bucket,
+            Key=key,
+            StorageClass='GLACIER_IR',
+            ContentType='image/tif',
+            # ACL='public-read'
+        )
+
+        return True
+
+    except botocore.exceptions.ClientError as error:
+        return {
+            "statusCode": 400,
+            "body": {
+                "message": f"Boto clienterror: {error}."
+            }
+        }
+
+
+def check_img_mode(bucket, key, im):
+    '''
+    Test image color mode to make sure Textract won't reject it.
+    For sure index type won't work (mode == '1')
+
+    Converting to RGB and re-saving, which will trigger a new step function run.
+    '''
+
+    if im.mode in ['1']:
+        im = im.convert('RGB')
+
+        buffer = io.BytesIO()
+        im.save(buffer, format="tiff", compression="jpeg")
+        buffer.seek(0)
+
+        # Now overwrite the original TIF image, which should re-trigger the Step Function
+        try:
+            s3_response = s3.put_object(
+                Body=buffer,
+                Bucket=bucket,
+                Key=key,
+                StorageClass='GLACIER_IR',
+                ContentType='image/tif',
+                # ACL='public-read'
+            )
+
+            return True
+        
+        except botocore.exceptions.ClientError as error:
+            return {
+                "statusCode": 400,
+                "body": {
+                    "message": f"Boto clienterror: {error}."
+                }
+            }
+
+    return False
 
 
 def check_oversized_mem(im, max_bytes=10485760):
@@ -181,6 +232,18 @@ def lambda_handler(event, context):
                 "pages": []
             }
         }
+    
+    # Check for indexed color mode and do version of check_oversized_dimen as above
+    bool_wrong_img_mode = check_img_mode(bucket, key, im)
+    if bool_wrong_img_mode:
+        print('Wrong image mode. Will try again.')
+        return {
+            "statusCode": 200,
+            "body": {
+                "message": "An incompatible image mode detected. A modified RGB copy has been written over the raw file, which should trigger another Step Function.",
+                "pages": []
+            }
+        }
 
     split_result = split_tiff(bucket, key, im)
     if len(split_result) == 1:
@@ -194,14 +257,22 @@ def lambda_handler(event, context):
             buffer.seek(0)
 
             # Overwrite image in raw bucket if resized.
-            s3.put_object(
-                Body=buffer,
-                Bucket=bucket,
-                Key=key,
-                StorageClass='GLACIER_IR',
-                ContentType='image/tif',
-                # ACL='public-read'
-            )
+            try:
+                s3_response = s3.put_object(
+                    Body=buffer,
+                    Bucket=bucket,
+                    Key=key,
+                    StorageClass='GLACIER_IR',
+                    ContentType='image/tif',
+                    # ACL='public-read'
+                )
+            except botocore.exceptions.ClientError as error:
+                return {
+                    "statusCode": 400,
+                    "body": {
+                        "message": f"Boto clienterror: {error}."
+                    }
+                }
 
             # Now exit, because save will trigger new run.
             print('Oversized TIF (memory). Will try again.')
@@ -225,15 +296,24 @@ def lambda_handler(event, context):
 
             out_keys.append({'bucket': page['bucket'], 'key': out_key, 'page_num': page['page_num']})
 
-            # Upload split image page to raw bucket
-            s3.put_object(
-                Body=page['img_buffer'],
-                Bucket=bucket,
-                Key=out_key,
-                StorageClass='GLACIER_IR',
-                ContentType='image/tif',
-                # ACL='public-read'
-            )
+            try:
+                # Upload split image page to raw bucket
+                s3_response = s3.put_object(
+                    Body=page['img_buffer'],
+                    Bucket=bucket,
+                    Key=out_key,
+                    StorageClass='GLACIER_IR',
+                    ContentType='image/tif',
+                    # ACL='public-read'
+                )
+
+            except botocore.exceptions.ClientError as error:
+                return {
+                    "statusCode": 400,
+                    "body": {
+                        "message": f"Boto ClientError: {error}."
+                    }
+                }
 
     else:
         print('Something strange happened. Error.')
