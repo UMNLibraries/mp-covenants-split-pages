@@ -1,73 +1,163 @@
+import io
 import json
-
+import toml
+import boto3
 import pytest
+from PIL import Image
 
-from hello_world import app
+from split_pages import app
+
+with open('samconfig.toml', 'r') as f:
+    config = toml.load(f)
+    s3_bucket = config['default']['deploy']['parameters']['s3_bucket']
+    s3_region = config['default']['deploy']['parameters']['region']
+
+s3 = boto3.client('s3')
+
+def open_s3_image(bucket, key):
+    response = s3.get_object(Bucket=bucket, Key=key)
+    im = Image.open(response['Body'])
+    return im
 
 
-@pytest.fixture()
-def apigw_event():
-    """ Generates API GW Event"""
-
+def build_put_event(bucket, region, infile, size=100000):
     return {
-        "body": '{ "test": "body"}',
-        "resource": "/{proxy+}",
-        "requestContext": {
-            "resourceId": "123456",
-            "apiId": "1234567890",
-            "resourcePath": "/{proxy+}",
-            "httpMethod": "POST",
-            "requestId": "c6af9ac6-7b61-11e6-9a41-93e8deadbeef",
-            "accountId": "123456789012",
-            "identity": {
-                "apiKey": "",
-                "userArn": "",
-                "cognitoAuthenticationType": "",
-                "caller": "",
-                "userAgent": "Custom User Agent String",
-                "user": "",
-                "cognitoIdentityPoolId": "",
-                "cognitoIdentityId": "",
-                "cognitoAuthenticationProvider": "",
-                "sourceIp": "127.0.0.1",
-                "accountId": "",
+        "version": "0",
+        "id": "187c05fd-3810-f137-7e72-d4d7c5b7efa4",
+        "detail-type": "Object Created",
+        "source": "aws.s3",
+        "account": "813228900636",
+        "time": "2024-06-21T15:55:50Z",
+        "region": region,
+        "resources": [
+            f"arn:aws:s3:::{bucket}"
+        ],
+        "detail": {
+            "version": "0",
+            "bucket": {
+                "name": bucket
             },
-            "stage": "prod",
-        },
-        "queryStringParameters": {"foo": "bar"},
-        "headers": {
-            "Via": "1.1 08f323deadbeefa7af34d5feb414ce27.cloudfront.net (CloudFront)",
-            "Accept-Language": "en-US,en;q=0.8",
-            "CloudFront-Is-Desktop-Viewer": "true",
-            "CloudFront-Is-SmartTV-Viewer": "false",
-            "CloudFront-Is-Mobile-Viewer": "false",
-            "X-Forwarded-For": "127.0.0.1, 127.0.0.2",
-            "CloudFront-Viewer-Country": "US",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Upgrade-Insecure-Requests": "1",
-            "X-Forwarded-Port": "443",
-            "Host": "1234567890.execute-api.us-east-1.amazonaws.com",
-            "X-Forwarded-Proto": "https",
-            "X-Amz-Cf-Id": "aaaaaaaaaae3VYQb9jd-nvCd-de396Uhbp027Y2JvkCPNLmGJHqlaA==",
-            "CloudFront-Is-Tablet-Viewer": "false",
-            "Cache-Control": "max-age=0",
-            "User-Agent": "Custom User Agent String",
-            "CloudFront-Forwarded-Proto": "https",
-            "Accept-Encoding": "gzip, deflate, sdch",
-        },
-        "pathParameters": {"proxy": "/examplepath"},
-        "httpMethod": "POST",
-        "stageVariables": {"baz": "qux"},
-        "path": "/examplepath",
+            "object": {
+                "key": infile,
+                "size": size,
+                "etag": "8e29d0cb274128925b950351126b9d0a",
+                "sequencer": "006675A2860D0D6FE6"
+            },
+            "request-id": "S3CY6VQ5T3W27C37",
+            "requester": "813228900636",
+            "source-ip-address": "75.72.150.179",
+            "reason": "PutObject"
+        }
     }
 
 
-def test_lambda_handler(apigw_event, mocker):
+@pytest.fixture()
+def index_1_page_tif_event_1():
+    """ Generates API GW Event"""
+    return build_put_event(s3_bucket, s3_region, "test/mn-olmsted-county/mn_olmsted_H81540_index_color_1_page.tiff")
 
-    ret = app.lambda_handler(apigw_event, "")
-    data = json.loads(ret["body"])
+@pytest.fixture()
+def index_1_page_tif_event_2():
+    return build_put_event(s3_bucket, s3_region, "test/nc-forsyth-county/nc_forsyth_00440001.001_index_color_1_page.tif")
+
+@pytest.fixture()
+def index_multi_page_tif_event_1():
+    return build_put_event(s3_bucket, s3_region, "test/mn-anoka-county/mn_anoka_26360876_index_color_multipage.TIF")
+
+@pytest.fixture()
+def rgb_weird_multi_page_jpeg_event_1():
+    '''I think this is in reality a multipage TIF saved with a JPG extension. Weird!'''
+    return build_put_event(s3_bucket, s3_region, "test/mn-sherburne-county/mn_sherburne_Abstract 86709_rgb.jpg")
+
+@pytest.fixture()
+def rgb_multi_page_tif_event_1():
+    return build_put_event(s3_bucket, s3_region, "test/mn-sherburne-county/mn_sherburne_Abstract 86713_rgb_multi_page.tif")
+
+@pytest.fixture()
+def rgb_multi_page_tif_bigmem_event_1():
+    # Oversized memory Dakota Torrens deed
+    return build_put_event(s3_bucket, s3_region, "test/mn-dakota-county/mn_dakota_doc_NONE_book_183_page_578_bigmem_multipage.tif")
+
+
+def test_index_1_page_tif_1(index_1_page_tif_event_1):
+
+    ret = app.lambda_handler(index_1_page_tif_event_1, "")
+    data = ret["body"]
+    print(data)
 
     assert ret["statusCode"] == 200
     assert "message" in ret["body"]
-    assert data["message"] == "hello world"
-    # assert "location" in data.dict_keys()
+    assert data["message"] == "Success"
+    assert data["modified_pages"] == [{'bucket': 'covenants-deed-images', 'key': 'test/mn-olmsted-county/mn_olmsted_H81540_index_color_1_page_MODIFIED.tiff', 'page_num': 1}]
+
+    # Check if page 1 also in correct mode
+    im = open_s3_image(data["modified_pages"][0]['bucket'], data["modified_pages"][0]['key'])
+    assert im.mode == 'RGB'
+
+
+def test_index_1_page_tif_2(index_1_page_tif_event_2):
+
+    ret = app.lambda_handler(index_1_page_tif_event_2, "")
+    data = ret["body"]
+    print(data)
+
+    assert ret["statusCode"] == 200
+    assert data["message"] == "Success"
+    assert data["modified_pages"] == [{'bucket': 'covenants-deed-images', 'key': 'test/nc-forsyth-county/nc_forsyth_00440001.001_index_color_1_page_MODIFIED.tif', 'page_num': 1}]
+
+    # Check if page 1 in correct mode
+    im = open_s3_image(data["modified_pages"][0]['bucket'], data["modified_pages"][0]['key'])
+    assert im.mode == 'RGB'
+
+
+def test_rgb_weird_multi_page_jpeg_1(rgb_weird_multi_page_jpeg_event_1):
+
+    ret = app.lambda_handler(rgb_weird_multi_page_jpeg_event_1, "")
+    data = ret["body"]
+    print(data)
+
+    assert ret["statusCode"] == 200
+    assert data["message"] == "Success"
+    assert len(data["modified_pages"]) == 2
+    assert data["modified_pages"][0]['key'] == "test/mn-sherburne-county/mn_sherburne_Abstract 86709_rgb_SPLITPAGE_1.tif"
+
+    # Check if page 2 also in correct mode
+    im = open_s3_image(data["modified_pages"][1]['bucket'], data["modified_pages"][1]['key'])
+    assert im.mode == 'RGB'
+
+
+def test_rgb_multi_page_tif_1(rgb_multi_page_tif_event_1):
+
+    ret = app.lambda_handler(rgb_multi_page_tif_event_1, "")
+    data = ret["body"]
+    print(data)
+
+    assert ret["statusCode"] == 200
+    assert data["message"] == "Success"
+    assert len(data["modified_pages"]) == 2
+
+    # Check if page 2 also in correct mode
+    im = open_s3_image(data["modified_pages"][1]['bucket'], data["modified_pages"][1]['key'])
+    assert im.mode == 'RGB'
+
+
+def test_rgb_multi_page_tif_bigmem_1(rgb_multi_page_tif_bigmem_event_1):
+
+    ret = app.lambda_handler(rgb_multi_page_tif_bigmem_event_1, "")
+    data = ret["body"]
+    print(data)
+
+    assert ret["statusCode"] == 200
+    assert data["message"] == "Success"
+    assert len(data["modified_pages"]) == 2
+
+    for page in data["modified_pages"]:
+        # Check if page in correct mode
+        im = open_s3_image(page['bucket'], page['key'])
+        assert im.mode == 'RGB'
+
+        # Check if page lower than memory threshold
+        buffer = io.BytesIO()
+        im.save(buffer, format="tiff", compression="jpeg")
+        byte_size = buffer.getbuffer().nbytes
+        assert byte_size <= 10485760
