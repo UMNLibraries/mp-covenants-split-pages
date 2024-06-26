@@ -8,6 +8,7 @@ pytest = "*"
 boto3 = "*"
 pillow = "*"
 toml = "*"
+pympler = "*"
 
 [dev-packages]
 

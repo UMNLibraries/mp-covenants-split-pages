@@ -1,8 +1,11 @@
 import io
+# import sys
+# import base64
 import json
 import toml
 import boto3
 import pytest
+# from pympler import asizeof
 from PIL import Image
 
 from split_pages import app
@@ -18,6 +21,33 @@ def open_s3_image(bucket, key):
     response = s3.get_object(Bucket=bucket, Key=key)
     im = Image.open(response['Body'])
     return im
+
+
+def get_s3_contents(bucket, key):
+    response = s3.get_object(Bucket=bucket, Key=key)
+    return str(response['Body'].read())
+
+
+def check_max_byte_size(im, max_byte_size=10380902):
+    '''10380902 is 99% of the hard Textract limit'''
+    # Method 1: buffer.nbytes
+    buffer = io.BytesIO()
+    im.save(buffer, format="tiff", compression="jpeg")
+    byte_size = buffer.getbuffer().nbytes
+
+    # # Method 2: pympler asizeof
+    # byte_size = asizeof.asizeof(im)
+
+    # Method 3: sys.getsizeof
+    # buffer = io.BytesIO()
+    # im.save(buffer, format="tiff", compression="jpeg")
+    # byte_size = sys.getsizeof(buffer)
+
+    # Method 4: base64 encoding
+    # im_contents = get_s3_contents(page['bucket'], page['key'])
+    # byte_size = len(base64.b64encode(im_contents.encode('utf-8')))
+
+    assert byte_size <= max_byte_size
 
 
 def build_put_event(bucket, region, infile, size=100000):
@@ -77,6 +107,17 @@ def rgb_multi_page_tif_event_1():
 def rgb_multi_page_tif_bigmem_event_1():
     # Oversized memory Dakota Torrens deed
     return build_put_event(s3_bucket, s3_region, "test/mn-dakota-county/mn_dakota_doc_NONE_book_183_page_578_bigmem_multipage.tif")
+
+@pytest.fixture()
+def multi_page_tif_bigmem_event_2():
+    # Oversized memory Sherburne multipage file
+    return build_put_event(s3_bucket, s3_region, "test/mn-sherburne-county/mn_sherburne_Abstract 104316_bigmem.tif")
+
+@pytest.fixture()
+def multi_page_tif_bigmem_event_3():
+    # Oversized memory Sherburne multipage file
+    return build_put_event(s3_bucket, s3_region, "test/mn-sherburne-county/mn_sherburne_Abstract 100615_bigmem.tif")
+
 
 
 def test_index_1_page_tif_1(index_1_page_tif_event_1):
@@ -156,8 +197,22 @@ def test_rgb_multi_page_tif_bigmem_1(rgb_multi_page_tif_bigmem_event_1):
         im = open_s3_image(page['bucket'], page['key'])
         assert im.mode == 'RGB'
 
+        check_max_byte_size(im)
+
+
+def test_multi_page_tif_bigmem_3(multi_page_tif_bigmem_event_3):
+
+    ret = app.lambda_handler(multi_page_tif_bigmem_event_3, "")
+    data = ret["body"]
+    print(data)
+
+    assert ret["statusCode"] == 200
+    assert data["message"] == "Success"
+
+    for page in data["modified_pages"][0:1]:
+        # Check if page in correct mode
+        im = open_s3_image(page['bucket'], page['key'])
+
         # Check if page lower than memory threshold
-        buffer = io.BytesIO()
-        im.save(buffer, format="tiff", compression="jpeg")
-        byte_size = buffer.getbuffer().nbytes
-        assert byte_size <= 10485760
+        check_max_byte_size(im)
+        

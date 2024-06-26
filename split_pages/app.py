@@ -88,16 +88,17 @@ def check_img_mode(im):
     return False, im
 
 
-def check_oversized_mem(im, max_bytes=10485760):
+def check_oversized_mem(im, max_bytes=10380902):
     '''
     Check if nbytes is small enough for textract, which has a limit of 10485760 bytes
+    Rounding down by 1% to make up for decode differences
 
     returns:
         Value 1, bool: Was the image oversized, requiring resave?
         Value 2, im: PIL image object
     '''
     buffer = io.BytesIO()
-    im.save(buffer, format="tiff")
+    im.save(buffer, format="tiff", compression="jpeg")
     byte_size = buffer.getbuffer().nbytes
 
     if byte_size > max_bytes:
@@ -113,7 +114,7 @@ def check_oversized_mem(im, max_bytes=10485760):
         im = im.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         buffer = io.BytesIO()
-        im.save(buffer, format="tiff")
+        im.save(buffer, format="tiff", compression="jpeg")
         # buffer.seek(0)
         final_byte_size = buffer.getbuffer().nbytes
         print(f'Resized to {final_byte_size} bytes ({round(final_byte_size / max_bytes, 2)}% of max)')
@@ -214,17 +215,17 @@ def lambda_handler(event, context):
             out_key = key
             page_im = im
 
+         # Check image mode...
+        bool_wrong_img_mode, page_im = check_img_mode(page_im)
+        if bool_wrong_img_mode:
+            bool_modified = True
+ 
         # Check oversized dimen...
         bool_oversized_dimen, page_im = check_oversized_dimen(page_im)
 
         # Check memory size...
         bool_mem_too_big, page_im = check_oversized_mem(page_im)
         if bool_mem_too_big:
-            bool_modified = True
-
-        # Check image mode...
-        bool_wrong_img_mode, page_im = check_img_mode(page_im)
-        if bool_wrong_img_mode:
             bool_modified = True
 
         if bool_modified:
