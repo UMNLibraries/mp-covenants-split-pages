@@ -8,31 +8,6 @@ import botocore
 
 from PIL import Image
 
-'''
-Folder structure:
-
-covenants-deeds-images
-    -raw
-        -mn-ramsey-county
-        -wi-milwaukee-county
-    -ocr
-        -txt
-            -mn-ramsey-county
-            -wi-milwaukee-county
-        -json
-            -mn-ramsey-county
-            -wi-milwaukee-county
-        -stats
-            -mn-ramsey-county
-            -wi-milwaukee-county
-        -hits
-            -mn-ramsey-county
-            -wi-milwaukee-county
-    -web
-        -mn-ramsey-county
-        -wi-milwaukee-county
-'''
-
 Image.MAX_IMAGE_PIXELS = 1000000000
 s3 = boto3.client('s3')
 
@@ -115,7 +90,7 @@ def check_oversized_mem(im, max_bytes=10380902):
 
         buffer = io.BytesIO()
         im.save(buffer, format="tiff", compression="jpeg")
-        # buffer.seek(0)
+
         final_byte_size = buffer.getbuffer().nbytes
         print(f'Resized to {final_byte_size} bytes ({round(final_byte_size / max_bytes, 2)}% of max)')
         return True, im
@@ -156,7 +131,7 @@ def sleep_if_needed(min_page_time, start_time):
 
 def lambda_handler(event, context):
     """
-    Do pre-processing steps needed before OCR is possible. Passed on information about each
+    Do pre-processing steps needed before OCR is possible. At end, pass on information about each
     modified or original file to looping step 2.
     """
     # print("Received event: " + json.dumps(event, indent=2))
@@ -169,15 +144,6 @@ def lambda_handler(event, context):
         # Get the object from an EventBridge event
         bucket = event['detail']['bucket']['name']
         key = event['detail']['object']['key']
-
-    # if "SPLITPAGE_" in key:
-    #     return {
-    #         "statusCode": 200,
-    #         "body": {
-    #             "message": "Event firing on creation of split page. Ignore and stop step function",
-    #             "pages": []
-    #         }
-    #     }
 
     if ".DS_Store" in key:
         return {
@@ -197,10 +163,6 @@ def lambda_handler(event, context):
         num_pages = im.n_frames
     except AttributeError:
         num_pages = 1
-    # if type(im) == 'JpegImageFile':
-    #     num_pages = 1
-    # else:
-    #     num_pages = im.n_frames
 
     unmodified_pages = []
     modified_pages = []
@@ -210,8 +172,6 @@ def lambda_handler(event, context):
         start_time = time.time()
 
         if num_pages > 1:
-            # key_minus_extension = re.split(r'\.tif(?:f)?', key, flags=re.IGNORECASE)[0]
-            # out_key = f"{key_minus_extension}_SPLITPAGE_{page_num+1}.tif"
             key_parts = re.split(r'\.(?=[A-Za-z]{3,4}$)', key, flags=re.IGNORECASE)
             key_minus_extension = key_parts[0]
             extension = key_parts[1]
