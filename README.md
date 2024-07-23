@@ -1,6 +1,6 @@
 # covenants-split-pages
 
-This AWS Lambda function is part of [Mapping Prejudice's](https://mappingprejudice.umn.edu/) Deed Machine application. This component receives information about a newly uploaded or updated imag, generally via an event triggered by a matching S3 upload event. The function examines the image to determine what, if any, reprocessing operations are necessary before the image can be fully processed by the Deed Machine.
+This AWS Lambda function is part of [Mapping Prejudice's](https://mappingprejudice.umn.edu/) Deed Machine application. This component receives information about a newly uploaded or updated image, generally via an event triggered by a matching S3 upload event. The function examines the image to determine what, if any, reprocessing operations are necessary before the image can be fully processed by the Deed Machine.
 
 The [Deed Machine](https://github.com/UMNLibraries/racial_covenants_processor/) is a multi-language set of tools that use OCR and crowdsourced transcription to identify racially restrictive covenant language, then map the results.
 
