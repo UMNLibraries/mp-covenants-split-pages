@@ -192,7 +192,16 @@ def lambda_handler(event, context):
 
     im = Image.open(response['Body'])
     bool_modified = False  # If the image goes through the whole process unmodified, no re-save is needed
-    num_pages = im.n_frames
+    
+    try:
+        num_pages = im.n_frames
+    except AttributeError:
+        num_pages = 1
+    # if type(im) == 'JpegImageFile':
+    #     num_pages = 1
+    # else:
+    #     num_pages = im.n_frames
+
     unmodified_pages = []
     modified_pages = []
 
@@ -215,11 +224,11 @@ def lambda_handler(event, context):
             out_key = key
             page_im = im
 
-         # Check image mode...
+        # Check image mode...
         bool_wrong_img_mode, page_im = check_img_mode(page_im)
         if bool_wrong_img_mode:
             bool_modified = True
- 
+
         # Check oversized dimen...
         bool_oversized_dimen, page_im = check_oversized_dimen(page_im)
 
