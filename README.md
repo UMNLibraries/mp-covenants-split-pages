@@ -23,7 +23,7 @@ The Lambda components of the Deed Machine are built using Amazon's Serverless Ap
 
 To build the application:
 
-You will need to make a copy of samconfig.toml.sample to set your actual config settings. Save this file as samconfig.toml. This file will be ignored by version control.
+You will need to make a copy of `samconfig.toml.sample` to set your actual config settings. Save this file as `samconfig.toml`. This file will be ignored by version control.
 
 Then:
 
