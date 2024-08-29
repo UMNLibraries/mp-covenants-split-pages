@@ -3,8 +3,8 @@ version = 0.2
 [default.deploy]
 [default.deploy.parameters]
 stack_name = "covenants-split-pages"
-s3_bucket = "covenants-deed-images"
+s3_bucket = "XXXX"
 s3_prefix = "covenants-split-pages"
-region = "us-east-2"
+region = "XXXX"
 capabilities = "CAPABILITY_IAM"
 image_repositories = []
