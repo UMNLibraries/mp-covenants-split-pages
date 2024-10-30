@@ -124,8 +124,6 @@ def true_jpeg_event_1():
     return build_put_event(s3_bucket, s3_region, "test/mn-sherburne-county/mn_sherburne_Abstract 88291_truejpeg.jpg")
 
 
-
-
 def test_index_1_page_tif_1(index_1_page_tif_event_1):
 
     ret = app.lambda_handler(index_1_page_tif_event_1, "")
@@ -235,3 +233,4 @@ def test_true_jpeg_1(true_jpeg_event_1):
     # Check if image in correct mode
     im = open_s3_image(data["pages"][0]['bucket'], data["pages"][0]['key'])
     assert im.mode == 'RGB'
+
