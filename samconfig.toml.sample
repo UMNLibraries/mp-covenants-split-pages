@@ -8,3 +8,13 @@ s3_prefix = "covenants-split-pages"
 region = "XXXX"
 capabilities = "CAPABILITY_IAM"
 image_repositories = []
+
+[otherprofile]
+[otherprofile.deploy]
+[otherprofile.deploy.parameters]
+stack_name = "mp-ca-contracosta-prd-lambda-split-pages"
+s3_bucket = "XXXX"
+s3_prefix = "lambda-split-pages"
+region = "XXXX"
+capabilities = "CAPABILITY_IAM"
+image_repositories = []
