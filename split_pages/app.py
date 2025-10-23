@@ -73,7 +73,8 @@ def check_oversized_mem(im, max_bytes=10380902):
         Value 2, im: PIL image object
     '''
     buffer = io.BytesIO()
-    im.save(buffer, format="tiff", compression="jpeg")
+    # im.save(buffer, format="tiff", compression="jpeg")
+    im.save(buffer, format="tiff", compression="tiff_lzw")
     byte_size = buffer.getbuffer().nbytes
 
     if byte_size > max_bytes:
@@ -89,7 +90,8 @@ def check_oversized_mem(im, max_bytes=10380902):
         im = im.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         buffer = io.BytesIO()
-        im.save(buffer, format="tiff", compression="jpeg")
+        # im.save(buffer, format="tiff", compression="jpeg")
+        im.save(buffer, format="tiff", compression="tiff_lzw")
 
         final_byte_size = buffer.getbuffer().nbytes
         print(f'Resized to {final_byte_size} bytes ({round(final_byte_size / max_bytes, 2)}% of max)')
@@ -200,15 +202,24 @@ def lambda_handler(event, context):
         if bool_modified:
             # All modified images require re-save, which will trigger another run of Step Function, with goal of getting to passing through unmodified on the next run 
             buffer = io.BytesIO()
-            page_im.save(buffer, format="tiff", compression="jpeg")
+            # page_im.save(buffer, format="tiff", compression="jpeg")
+            page_im.save(buffer, format="tiff", compression="tiff_lzw")
             buffer.seek(0)
 
             # Check for test folder upload, which indicates that modified files will have _modified appended to avoid overwriting raw samples
             if 'test/' in out_key.lower() and 'splitpage' not in out_key.lower():
-                key_parts = re.split(r'\.(?=[A-Za-z]{3,4}$)', key, flags=re.IGNORECASE)
-                key_minus_extension = key_parts[0]
-                extension = key_parts[1]
-                out_key = f"{key_minus_extension}_MODIFIED.{extension}"
+                if re.match(r'.+\.\d{3}$', key):
+                    # file with no extension, assume it's a tif with no .tif at the end, e.g. file.001
+                    out_key = f"{key}_MODIFIED.tif"
+                else:
+                    key_parts = re.split(r'\.(?=[A-Za-z]{3,4}$)', key, flags=re.IGNORECASE)
+                    key_minus_extension = key_parts[0]
+                    extension = key_parts[1]
+                    out_key = f"{key_minus_extension}_MODIFIED.{extension}"
+            else:
+                if re.match(r'.+\.\d{3}$', key):
+                    # file with no extension, assume it's a tif with no .tif at the end, e.g. file.001
+                    out_key = f"{key}.tif"
 
             modified_pages.append({'bucket': bucket, 'key': out_key, 'page_num': page_num + 1})
 

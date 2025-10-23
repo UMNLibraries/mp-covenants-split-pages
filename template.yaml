@@ -20,6 +20,9 @@ Resources:
       Runtime: python3.10
       Architectures:
         - x86_64
+      Policies:
+      # Give the Lambda service access to S3
+      - AmazonS3FullAccess
       Events:
         OCRPage:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
