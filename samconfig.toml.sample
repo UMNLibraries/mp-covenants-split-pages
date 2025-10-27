@@ -4,6 +4,8 @@ version = 0.2
 [default.deploy.parameters]
 stack_name = "covenants-split-pages"
 s3_bucket = "XXXX"
+s3_bucket_in = "XXXX"
+s3_bucket_out = "XXXX"
 s3_prefix = "covenants-split-pages"
 region = "XXXX"
 capabilities = "CAPABILITY_IAM"
@@ -14,6 +16,8 @@ image_repositories = []
 [otherprofile.deploy.parameters]
 stack_name = "mp-ca-contracosta-prd-lambda-split-pages"
 s3_bucket = "XXXX"
+s3_bucket_in = "XXXX"
+s3_bucket_out = "XXXX"
 s3_prefix = "lambda-split-pages"
 region = "XXXX"
 capabilities = "CAPABILITY_IAM"

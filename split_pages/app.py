@@ -137,6 +137,10 @@ def lambda_handler(event, context):
     modified or original file to looping step 2.
     """
     # print("Received event: " + json.dumps(event, indent=2))
+    # TODO: Need option for separate in bucket and out bucket
+    in_bucket = None
+    out_bucket = None
+
     if 'Records' in event:
         # Get the object from a more standard put event
         bucket = event['Records'][0]['s3']['bucket']['name']
@@ -146,6 +150,10 @@ def lambda_handler(event, context):
         # Get the object from an EventBridge event
         bucket = event['detail']['bucket']['name']
         key = event['detail']['object']['key']
+        if 'in_bucket' in event['detail']['object']:
+            in_bucket = event['detail']['object']['in_bucket']
+        if 'out_bucket' in event['detail']['object']:
+            out_bucket = event['detail']['object']['out_bucket']
 
     if ".DS_Store" in key:
         return {
@@ -156,7 +164,10 @@ def lambda_handler(event, context):
             }
         }
 
-    response = s3.get_object(Bucket=bucket, Key=key)
+    if in_bucket:
+        response = s3.get_object(Bucket=in_bucket, Key=key)
+    else:
+        response = s3.get_object(Bucket=bucket, Key=key)
 
     im = Image.open(response['Body'])
     bool_modified = False  # If the image goes through the whole process unmodified, no re-save is needed
@@ -221,9 +232,12 @@ def lambda_handler(event, context):
                     # file with no extension, assume it's a tif with no .tif at the end, e.g. file.001
                     out_key = f"{key}.tif"
 
-            modified_pages.append({'bucket': bucket, 'key': out_key, 'page_num': page_num + 1})
-
-            put_tif_buffer(bucket, out_key, buffer)
+            if out_bucket:
+                modified_pages.append({'bucket': out_bucket, 'key': out_key, 'page_num': page_num + 1})
+                put_tif_buffer(out_bucket, out_key, buffer)
+            else:
+                modified_pages.append({'bucket': bucket, 'key': out_key, 'page_num': page_num + 1})
+                put_tif_buffer(bucket, out_key, buffer)
             sleep_if_needed(min_page_time, start_time)
 
         else:
@@ -234,7 +248,9 @@ def lambda_handler(event, context):
         "statusCode": 200,
         "body": {
             "message": "Success",
-            "bucket": bucket,
+            "bucket": bucket if not in_bucket else None,
+            "in_bucket": in_bucket,
+            "out_bucket": out_bucket,
             "orig": key,
             "page_count": num_pages,
             "modified_pages": modified_pages,

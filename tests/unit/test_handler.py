@@ -12,6 +12,8 @@ from split_pages import app
 
 with open('samconfig.toml', 'r') as f:
     config = toml.load(f)
+    s3_bucket_in = config['default']['deploy']['parameters']['s3_bucket_in']
+    s3_bucket_out = config['default']['deploy']['parameters']['s3_bucket_out']
     s3_bucket = config['default']['deploy']['parameters']['s3_bucket']
     s3_region = config['default']['deploy']['parameters']['region']
 
@@ -80,6 +82,37 @@ def build_put_event(bucket, region, infile, size=100000):
         }
     }
 
+def build_2_bucket_put_event(in_bucket, out_bucket, region, infile, size=100000):
+    return {
+        "version": "0",
+        "id": "187c05fd-3810-f137-7e72-d4d7c5b7efa4",
+        "detail-type": "Object Created",
+        "source": "aws.s3",
+        "account": "813228900636",
+        "time": "2024-06-21T15:55:50Z",
+        "region": region,
+        "resources": [
+            f"arn:aws:s3:::{in_bucket}"
+        ],
+        "detail": {
+            "version": "0",
+            "bucket": {
+                "name": in_bucket
+            },
+            "object": {
+                "key": infile,
+                "size": size,
+                "etag": "8e29d0cb274128925b950351126b9d0a",
+                "sequencer": "006675A2860D0D6FE6",
+                "in_bucket": in_bucket,
+                "out_bucket": out_bucket,
+            },
+            "request-id": "S3CY6VQ5T3W27C37",
+            "requester": "813228900636",
+            "source-ip-address": "75.72.150.179",
+            "reason": "PutObject"
+        }
+    }
 
 @pytest.fixture()
 def index_1_page_tif_event_1():
@@ -128,6 +161,10 @@ def no_ext_tif_event_1():
     # TIF file with .001 extension, e.g. Forsyth or Contra Costa County
     return build_put_event(s3_bucket, s3_region, "test/ca-contra-costa-county/19499142059800.001")
 
+@pytest.fixture()
+def stearns_2_bucket_event_1():
+    # Testing an in and out bucket
+    return build_2_bucket_put_event(s3_bucket_in, s3_bucket_out, s3_region, "test/mn-stearns-county/mn_stearns-usmnstr-ftl-idx-0001-0000-0000-000_00001-000.jpg")
 
 def test_index_1_page_tif_1(index_1_page_tif_event_1):
 
@@ -248,6 +285,24 @@ def test_no_ext_tif(no_ext_tif_event_1):
     assert ret["statusCode"] == 200
     assert data["message"] == "Success"
     assert data["page_count"] == 1
+    
+    # Check if image in correct mode
+    page_data = data["modified_pages"][0]
+    im = open_s3_image(page_data['bucket'], page_data['key'])
+    assert im.mode == 'RGB'
+
+def test_stearns_2_bucket(stearns_2_bucket_event_1):
+    ret = app.lambda_handler(stearns_2_bucket_event_1, "")
+    data = ret["body"]
+    print(data)
+
+    assert ret["statusCode"] == 200
+    assert data["message"] == "Success"
+    assert data["page_count"] == 1
+    assert data["bucket"] == None
+    assert s3_bucket_in is not None
+    assert data["in_bucket"] == s3_bucket_in
+    assert data["out_bucket"] == s3_bucket_out
     
     # Check if image in correct mode
     page_data = data["modified_pages"][0]
