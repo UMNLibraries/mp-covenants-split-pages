@@ -5,14 +5,79 @@ import time
 import urllib.parse
 import boto3
 import botocore
+from io import BytesIO
 
 from PIL import Image
+import pymupdf # PyMuPDF
 
 Image.MAX_IMAGE_PIXELS = 1000000000
 s3 = boto3.client('s3')
 
 min_page_time = 0.6
 test_mode = False
+
+
+def convert_pdf_to_img(s3_response):
+    ''' Convert PDF files to a single- or multi-page TIFF before more processing'''
+
+    doc = pymupdf.open(stream=BytesIO(s3_response['Body'].read()), filetype="pdf")
+    num_pages = doc.page_count
+    print(f"The document has {num_pages} pages.")
+
+    pil_images = []
+
+    for page_num in range(len(doc)):
+        page = doc.load_page(page_num)
+        
+        # Render the page to a Pixmap with the specified DPI
+        pix = page.get_pixmap(dpi=300)
+        
+        # Convert the Pixmap to a PIL Image
+        # Determine mode based on alpha channel presence
+        mode = "RGBA" if pix.alpha else "RGB"
+        img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
+        
+        pil_images.append(img)
+    
+    doc.close()
+    return pil_images
+
+
+def tif_pages_to_list(im):
+    ''' Convert image to list of PIL Image instances for each page. This will insure similar output for converted PDF pages and multi-page TIFs '''
+    try:
+        num_pages = im.n_frames
+    except AttributeError:
+        # If only one page, return list with one item, the original open PIL Image
+        num_pages = 1
+        return [im], False
+
+    # For multi-page images...
+    page_ims = []
+    for page_num in range(0, num_pages):
+        im.seek(page_num)
+        page_ims.append(im.copy())
+    return page_ims, True
+    
+
+def check_img_mode(im):
+    '''
+    Test image color mode to make sure Textract won't reject it.
+    For sure index type won't work (mode == '1')
+
+    returns:
+        Value 1, bool: Was the image in an incompatible color mode, requiring resave?
+        Value 2, im: PIL image object
+    '''
+    print(im.mode)
+    if im.mode in ['1']:
+        print('attempting conversion')
+        im = im.convert('RGB')
+
+        return True, im
+
+    return False, im
+
 
 def check_oversized_dimen(im):
     '''
@@ -42,25 +107,6 @@ def check_oversized_dimen(im):
     im = im.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
     return True, im
-
-
-def check_img_mode(im):
-    '''
-    Test image color mode to make sure Textract won't reject it.
-    For sure index type won't work (mode == '1')
-
-    returns:
-        Value 1, bool: Was the image in an incompatible color mode, requiring resave?
-        Value 2, im: PIL image object
-    '''
-    print(im.mode)
-    if im.mode in ['1']:
-        print('attempting conversion')
-        im = im.convert('RGB')
-
-        return True, im
-
-    return False, im
 
 
 def check_oversized_mem(im, max_bytes=10380902):
@@ -169,33 +215,36 @@ def lambda_handler(event, context):
     else:
         response = s3.get_object(Bucket=bucket, Key=key)
 
-    im = Image.open(response['Body'])
+    print(key)
+
+    key_parts = re.split(r'\.(?=[A-Za-z0-9]{3,4}$)', key, flags=re.IGNORECASE)
+    key_minus_extension = key_parts[0]
+    extension = key_parts[1]
+
     bool_modified = False  # If the image goes through the whole process unmodified, no re-save is needed
-    
-    try:
-        num_pages = im.n_frames
-    except AttributeError:
-        num_pages = 1
+
+    # Convert from PDF if necessary
+    if extension in ['pdf', 'PDF']:
+        print('need to convert pdf')
+        page_ims = convert_pdf_to_img(response)
+        bool_modified = True
+    else:
+        im = Image.open(response['Body'])
+        page_ims, bool_modified = tif_pages_to_list(im)
 
     unmodified_pages = []
     modified_pages = []
 
-    for page_num in range(0, num_pages):
+    # for page_num in range(0, num_pages):
+    num_pages = len(page_ims)
+    for page_num, page_im in enumerate(page_ims):
         # Save star page of processing each time for use in possible sleep later
         start_time = time.time()
 
         if num_pages > 1:
-            key_parts = re.split(r'\.(?=[A-Za-z]{3,4}$)', key, flags=re.IGNORECASE)
-            key_minus_extension = key_parts[0]
-            extension = key_parts[1]
             out_key = f"{key_minus_extension}_SPLITPAGE_{page_num+1}.tif"  # I guess everything modified will be a TIF? Maybe should be a JPEG for storage, but can revist later.
-
-            bool_modified = True  # Multipage automatically means re-save needed
-            im.seek(page_num)
-            page_im = im.copy()
         else:
             out_key = key
-            page_im = im
 
         # Check image mode...
         bool_wrong_img_mode, page_im = check_img_mode(page_im)
@@ -223,10 +272,7 @@ def lambda_handler(event, context):
                     # file with no extension, assume it's a tif with no .tif at the end, e.g. file.001
                     out_key = f"{key}_MODIFIED.tif"
                 else:
-                    key_parts = re.split(r'\.(?=[A-Za-z]{3,4}$)', key, flags=re.IGNORECASE)
-                    key_minus_extension = key_parts[0]
-                    extension = key_parts[1]
-                    out_key = f"{key_minus_extension}_MODIFIED.{extension}"
+                    out_key = f"{key_minus_extension}_MODIFIED.tif"
             else:
                 if re.match(r'.+\.\d{3}$', key):
                     # file with no extension, assume it's a tif with no .tif at the end, e.g. file.001

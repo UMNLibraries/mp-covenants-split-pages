@@ -12,10 +12,10 @@ from split_pages import app
 
 with open('samconfig.toml', 'r') as f:
     config = toml.load(f)
-    s3_bucket_in = config['default']['deploy']['parameters']['s3_bucket_in']
-    s3_bucket_out = config['default']['deploy']['parameters']['s3_bucket_out']
     s3_bucket = config['default']['deploy']['parameters']['s3_bucket']
     s3_region = config['default']['deploy']['parameters']['region']
+    s3_bucket_in = config['default']['deploy']['parameters']['s3_bucket_in']
+    s3_bucket_out = config['default']['deploy']['parameters']['s3_bucket_out']
 
 s3 = boto3.client('s3')
 
@@ -166,6 +166,17 @@ def stearns_2_bucket_event_1():
     # Testing an in and out bucket
     return build_2_bucket_put_event(s3_bucket_in, s3_bucket_out, s3_region, "test/mn-stearns-county/mn_stearns-usmnstr-ftl-idx-0001-0000-0000-000_00001-000.jpg")
 
+@pytest.fixture()
+def stearns_pdf_event_1():
+    # Testing an in and out bucket
+    return build_2_bucket_put_event(s3_bucket_in, s3_bucket_out, s3_region, "test/mn-stearns-county/mn_stearns-usmnstr-aag-026-000-0000-000_00135-000.pdf")
+
+@pytest.fixture()
+def stearns_multipage_pdf_event_1():
+    # Testing an in and out bucket
+    return build_2_bucket_put_event(s3_bucket_in, s3_bucket_out, s3_region, "test/mn-stearns-county/mn_stearns-SSLMKonica23091509280.pdf")
+
+
 def test_index_1_page_tif_1(index_1_page_tif_event_1):
 
     ret = app.lambda_handler(index_1_page_tif_event_1, "")
@@ -175,7 +186,7 @@ def test_index_1_page_tif_1(index_1_page_tif_event_1):
     assert ret["statusCode"] == 200
     assert "message" in ret["body"]
     assert data["message"] == "Success"
-    assert data["modified_pages"] == [{'bucket': 'covenants-deed-images', 'key': 'test/mn-olmsted-county/mn_olmsted_H81540_index_color_1_page_MODIFIED.tiff', 'page_num': 1}]
+    assert data["modified_pages"] == [{'bucket': 'covenants-deed-images', 'key': 'test/mn-olmsted-county/mn_olmsted_H81540_index_color_1_page_MODIFIED.tif', 'page_num': 1}]
 
     # Check if page 1 also in correct mode
     im = open_s3_image(data["modified_pages"][0]['bucket'], data["modified_pages"][0]['key'])
@@ -306,5 +317,42 @@ def test_stearns_2_bucket(stearns_2_bucket_event_1):
     
     # Check if image in correct mode
     page_data = data["modified_pages"][0]
+    im = open_s3_image(page_data['bucket'], page_data['key'])
+    assert im.mode == 'RGB'
+
+
+def test_stearns_pdf_1(stearns_pdf_event_1):
+    ret = app.lambda_handler(stearns_pdf_event_1, "")
+    data = ret["body"]
+    print(data)
+
+    assert ret["statusCode"] == 200
+    assert data["message"] == "Success"
+    assert data["page_count"] == 1
+    assert data["bucket"] == None
+    assert s3_bucket_in is not None
+    assert data["in_bucket"] == s3_bucket_in
+    assert data["out_bucket"] == s3_bucket_out
+    
+    # Check if image in correct mode
+    page_data = data["modified_pages"][0]
+    im = open_s3_image(page_data['bucket'], page_data['key'])
+    assert im.mode == 'RGB'
+
+def test_stearns_multipage_pdf_1(stearns_multipage_pdf_event_1):
+    ret = app.lambda_handler(stearns_multipage_pdf_event_1, "")
+    data = ret["body"]
+    print(data)
+
+    assert ret["statusCode"] == 200
+    assert data["message"] == "Success"
+    assert data["page_count"] == 3
+    assert data["bucket"] == None
+    assert s3_bucket_in is not None
+    assert data["in_bucket"] == s3_bucket_in
+    assert data["out_bucket"] == s3_bucket_out
+    
+    # Check if image in correct mode
+    page_data = data["modified_pages"][1]
     im = open_s3_image(page_data['bucket'], page_data['key'])
     assert im.mode == 'RGB'
