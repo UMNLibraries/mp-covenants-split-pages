@@ -92,7 +92,8 @@ def build_2_bucket_put_event(in_bucket, out_bucket, region, infile, size=100000)
         "time": "2024-06-21T15:55:50Z",
         "region": region,
         "resources": [
-            f"arn:aws:s3:::{in_bucket}"
+            f"arn:aws:s3:::{in_bucket}",
+            f"arn:aws:s3:::{out_bucket}",
         ],
         "detail": {
             "version": "0",
@@ -175,6 +176,13 @@ def stearns_pdf_event_1():
 def stearns_multipage_pdf_event_1():
     # Testing an in and out bucket
     return build_2_bucket_put_event(s3_bucket_in, s3_bucket_out, s3_region, "test/mn-stearns-county/mn_stearns-SSLMKonica23091509280.pdf")
+
+@pytest.fixture()
+def stearns_jpg_clean_1():
+    # Testing an in and out bucket
+    # return build_2_bucket_put_event(s3_bucket_in, s3_bucket_out, s3_region, "test/mn-stearns-county/mn_stearns-usmnstr-dee-346-000-0000-000_00001-000.jpg")
+    return build_2_bucket_put_event(s3_bucket_in, s3_bucket_out, s3_region, "test/mn-stearns-county/mn_stearns-usmnstr-dee-346-000-0000-000_00001-000_MODIFIED.tif")
+
 
 
 def test_index_1_page_tif_1(index_1_page_tif_event_1):
@@ -354,5 +362,24 @@ def test_stearns_multipage_pdf_1(stearns_multipage_pdf_event_1):
     
     # Check if image in correct mode
     page_data = data["modified_pages"][1]
+    im = open_s3_image(page_data['bucket'], page_data['key'])
+    assert im.mode == 'RGB'
+
+
+def test_stearns_jpg_clean_1(stearns_jpg_clean_1):
+    ret = app.lambda_handler(stearns_jpg_clean_1, "")
+    data = ret["body"]
+    print(data)
+
+    assert ret["statusCode"] == 200
+    assert data["message"] == "Success"
+    assert data["page_count"] == 1
+    assert data["bucket"] == None
+    assert s3_bucket_in is not None
+    assert data["in_bucket"] == s3_bucket_in
+    assert data["out_bucket"] == s3_bucket_out
+    
+    # Check if image in correct mode
+    page_data = data["pages"][0]
     im = open_s3_image(page_data['bucket'], page_data['key'])
     assert im.mode == 'RGB'

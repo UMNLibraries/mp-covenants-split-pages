@@ -52,6 +52,9 @@ def tif_pages_to_list(im):
         num_pages = 1
         return [im], False
 
+    if num_pages == 1:
+        return [im], False
+
     # For multi-page images...
     page_ims = []
     for page_num in range(0, num_pages):
@@ -148,6 +151,7 @@ def check_oversized_mem(im, max_bytes=10380902):
 
 
 def put_tif_buffer(bucket, key, buffer):
+    print(bucket, key)
     try:
         s3_response = s3.put_object(
             Body=buffer,
@@ -159,6 +163,7 @@ def put_tif_buffer(bucket, key, buffer):
         )
         return True
     except botocore.exceptions.ClientError as error:
+        print('put error')
         return {
             "statusCode": 400,
             "body": {
@@ -177,6 +182,17 @@ def sleep_if_needed(min_page_time, start_time):
             time.sleep(time_remaining)
 
 
+def build_out_key_path(key):
+    ''' Don't send test data to raw/, because that will trigger step function '''
+    if 'test/' in key:
+        return key
+    
+    if not key.startswith('raw/'):
+        return 'raw/' + key
+    
+    return key
+
+
 def lambda_handler(event, context):
     """
     Do pre-processing steps needed before OCR is possible. At end, pass on information about each
@@ -184,6 +200,7 @@ def lambda_handler(event, context):
     """
     # print("Received event: " + json.dumps(event, indent=2))
     # TODO: Need option for separate in bucket and out bucket
+    # TODO: Add "raw" prefix if in another bucket
     in_bucket = None
     out_bucket = None
 
@@ -210,16 +227,16 @@ def lambda_handler(event, context):
             }
         }
 
-    if in_bucket:
-        response = s3.get_object(Bucket=in_bucket, Key=key)
-    else:
-        response = s3.get_object(Bucket=bucket, Key=key)
-
     print(key)
 
     key_parts = re.split(r'\.(?=[A-Za-z0-9]{3,4}$)', key, flags=re.IGNORECASE)
     key_minus_extension = key_parts[0]
     extension = key_parts[1]
+
+    if in_bucket:
+        response = s3.get_object(Bucket=in_bucket, Key=key)
+    else:
+        response = s3.get_object(Bucket=bucket, Key=key)
 
     bool_modified = False  # If the image goes through the whole process unmodified, no re-save is needed
 
@@ -253,6 +270,8 @@ def lambda_handler(event, context):
 
         # Check oversized dimen...
         bool_oversized_dimen, page_im = check_oversized_dimen(page_im)
+        if bool_oversized_dimen:
+            bool_modified = True
 
         # Check memory size...
         bool_mem_too_big, page_im = check_oversized_mem(page_im)
@@ -278,6 +297,7 @@ def lambda_handler(event, context):
                     # file with no extension, assume it's a tif with no .tif at the end, e.g. file.001
                     out_key = f"{key}.tif"
 
+            out_key = build_out_key_path(out_key)
             if out_bucket:
                 modified_pages.append({'bucket': out_bucket, 'key': out_key, 'page_num': page_num + 1})
                 put_tif_buffer(out_bucket, out_key, buffer)
@@ -287,8 +307,9 @@ def lambda_handler(event, context):
             sleep_if_needed(min_page_time, start_time)
 
         else:
+            # TODO: key coming out null
             # These unmodified pages will go on to the next step directly from here
-            unmodified_pages.append({'bucket': bucket, 'key': out_key, 'page_num': page_num + 1})
+            unmodified_pages.append({'bucket': bucket, 'key': build_out_key_path(out_key), 'page_num': page_num + 1})
 
     return {
         "statusCode": 200,

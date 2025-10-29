@@ -30,19 +30,19 @@ Then:
 ```bash
 pipenv install
 pipenv shell
-sam build
+sam build --use-container
 ```
 
 To rebuild and deploy the application:
 
 ```bash
-sam build && sam deploy
+sam build --use-container && sam deploy
 ```
 
 Example with non-default aws profile:
 
 ```bash
-sam build && sam deploy --profile contracosta --config-env contracosta
+sam build  --use-container && sam deploy --profile contracosta --config-env contracosta
 ```
 
 To run tests:
